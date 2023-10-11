@@ -1,17 +1,17 @@
 ﻿using System.Data.SqlClient;
 using System.Data;
+using JWTAuth.Interfaces;
+using System.Data.Common;
 
-namespace DataProvider
+namespace JWTAuth.Services
 {
-    internal class SqlProvider
-    {
-        string _connectionString { get; set; }
-        SqlConnection _connection { get; set; }
+    public class DataProviderService : IDataProviderService
+    {     
+        IConfiguration _configuration;
 
-        public SqlProvider(string connectionString)
+        public DataProviderService(IConfiguration config)
         {
-            _connectionString = connectionString;
-            _connection = new SqlConnection(connectionString);
+            _configuration = config;            
         }
 
         public delegate void NonQueryParams(SqlParameterCollection col);
@@ -20,48 +20,54 @@ namespace DataProvider
         public delegate void ExecuteCmdReader(SqlDataReader DataReader, short set);
         public async Task ExecuteNonQuery(string storedProcedure, NonQueryParams paramCollection, NonQueryOutput paramOutputCollection)
         {
-            using (SqlCommand command = new SqlCommand(storedProcedure, _connection))
+            using (SqlConnection _connection = new SqlConnection(_configuration.GetConnectionString("Sql")))
             {
-                command.CommandType = CommandType.StoredProcedure;
-                if (paramCollection != null)
+                using (SqlCommand command = new SqlCommand(storedProcedure, _connection))
                 {
-                    paramCollection(command.Parameters);
-                }
-                await _connection.OpenAsync();
-                int rows = await command.ExecuteNonQueryAsync();
-                if (paramOutputCollection != null)
-                {
-                    paramOutputCollection(command.Parameters);
-                }                    
-                _connection.Close();
-            };
+                    command.CommandType = CommandType.StoredProcedure;
+                    if (paramCollection != null)
+                    {
+                        paramCollection(command.Parameters);
+                    }
+                    await _connection.OpenAsync();
+                    int rows = await command.ExecuteNonQueryAsync();
+                    if (paramOutputCollection != null)
+                    {
+                        paramOutputCollection(command.Parameters);
+                    }
+                    _connection.Close();
+                };
+            };            
         }
 
         public async Task ExecuteCmd(string storedProcedure, ExecuteCmdParams paramCollection, ExecuteCmdReader readerOutput)
         {
-            using (SqlCommand command = new SqlCommand(storedProcedure, _connection))
+            using (SqlConnection _connection = new SqlConnection(_configuration.GetConnectionString("Sql")))
             {
-                command.CommandType = CommandType.StoredProcedure;
-                if (paramCollection != null)
+                using (SqlCommand command = new SqlCommand(storedProcedure, _connection))
                 {
-                    paramCollection(command.Parameters);
-                }
-                await _connection.OpenAsync();
-                SqlDataReader dataReader = await command.ExecuteReaderAsync();               
-                if (readerOutput != null)
-                {
-                    short set = 0;
-                    do
+                    command.CommandType = CommandType.StoredProcedure;
+                    if (paramCollection != null)
                     {
-                        while (dataReader.Read())
-                        {
-                            readerOutput(dataReader, set);
-                        }
-                        set++;
+                        paramCollection(command.Parameters);
                     }
-                    while (dataReader.NextResult());
-                }
-                _connection.Close();
+                    await _connection.OpenAsync();
+                    SqlDataReader dataReader = await command.ExecuteReaderAsync();
+                    if (readerOutput != null)
+                    {
+                        short set = 0;
+                        do
+                        {
+                            while (dataReader.Read())
+                            {
+                                readerOutput(dataReader, set);
+                            }
+                            set++;
+                        }
+                        while (dataReader.NextResult());
+                    }
+                    _connection.Close();
+                };
             };
         }
     }
